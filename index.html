@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家庭班表月曆</title>
+
+<!-- ======================================================
+     🔧 設定區：申請完 Firebase 後把下面的值填入
+     步驟：
+     1. 去 https://console.firebase.google.com
+     2. 新增專案（免費方案即可）
+     3. 左側選「建構」→「Realtime Database」→ 建立資料庫
+     4. 規則頁籤把 read/write 都改成 true（家人免登入就能用）
+     5. 回到「專案設定」→「您的應用程式」→ 新增網頁應用程式
+     6. 把下面的值替換掉
+     ====================================================== -->
+<script>
+  const FIREBASE_CONFIG = {
+    apiKey:            "AIzaSyANP1RiD-GGQsDtBFAU65HOcN2Ux_qJe3w",
+    authDomain:        "family-calendar-fdf7f.firebaseapp.com",
+    databaseURL:       "https://family-calendar-fdf7f-default-rtdb.firebaseio.com",
+    projectId:         "family-calendar-fdf7f",
+    storageBucket:     "family-calendar-fdf7f.firebasestorage.app",
+    messagingSenderId: "165864069200",
+    appId:             "1:165864069200:web:3bb7ac4466de6634c25955"
+  };
+</script>
+<!-- ====================================================== -->
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC",
+                 "Microsoft JhengHei", sans-serif;
+    background: #F7F6F3;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 420px;
+    padding: 16px 12px 40px;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0 18px;
+  }
+  .header h1 {
+    font-size: 17px;
+    font-weight: 500;
+    color: #2C2C2A;
+    letter-spacing: .02em;
+  }
+  .nav-btn {
+    background: #fff;
+    border: 1px solid #D3D1C7;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #2C2C2A;
+    transition: background .12s;
+    font-family: inherit;
+  }
+  .nav-btn:hover { background: #F1EFE8; }
+  .nav-btn:active { transform: scale(.97); }
+
+  /* ── Day of week ── */
+  .dow-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 5px;
+  }
+  .dow-cell {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 500;
+    color: #888780;
+    padding: 3px 0;
+  }
+
+  /* ── Calendar grid ── */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .day-cell {
+    background: #fff;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    min-height: 54px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 7px 2px 6px;
+    cursor: pointer;
+    transition: border-color .15s, background .12s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .day-cell:hover { background: #F7F6F3; }
+  .day-cell:active { transform: scale(.96); }
+  .day-cell.today { border-color: #378ADD; }
+  .day-cell.other-month { background: transparent; }
+  .day-cell.other-month .day-num { color: #B4B2A9; }
+
+  .day-num {
+    font-size: 13px;
+    font-weight: 500;
+    color: #2C2C2A;
+    line-height: 1;
+  }
+
+  .dot-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: center;
+    margin-top: 5px;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    justify-content: center;
+    margin-top: 20px;
+    padding: 14px 0 4px;
+    border-top: 1px solid #E8E6E0;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #5F5E5A;
+  }
+  .legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Sync status ── */
+  .sync-status {
+    text-align: center;
+    font-size: 11px;
+    color: #888780;
+    margin-top: 10px;
+    min-height: 16px;
+    transition: opacity .3s;
+  }
+
+  /* ── Modal overlay ── */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .38);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+  .modal-bg.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 18px 18px 0 0;
+    width: 100%;
+    max-width: 420px;
+    padding: 22px 16px 36px;
+    transform: translateY(24px);
+    transition: transform .22s cubic-bezier(.22,1,.36,1);
+  }
+  .modal-bg.open .modal {
+    transform: translateY(0);
+  }
+  .modal-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: #2C2C2A;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+  .shift-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .shift-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 14px;
+    border-radius: 12px;
+    border: 1px solid #E8E6E0;
+    background: #FAFAF8;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: background .12s, transform .1s;
+  }
+  .shift-btn:hover { background: #F1EFE8; }
+  .shift-btn:active { transform: scale(.97); }
+  .shift-btn.active { border-width: 2px; }
+
+  .shift-dot-sm {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .clear-btn, .cancel-btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .clear-btn {
+    border: 1px solid #D3D1C7;
+    background: none;
+    color: #5F5E5A;
+    margin-bottom: 8px;
+  }
+  .clear-btn:hover { background: #F1EFE8; }
+  .cancel-btn {
+    border: none;
+    background: none;
+    color: #B4B2A9;
+  }
+  .cancel-btn:hover { color: #888780; }
+
+  /* ── Error banner ── */
+  .error-banner {
+    background: #FCEBEB;
+    color: #791F1F;
+    border: 1px solid #F7C1C1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    margin-bottom: 12px;
+    display: none;
+    line-height: 1.5;
+  }
+  .error-banner.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="error-banner" id="error-banner">
+    ⚠️ 尚未設定 Firebase — 請打開 HTML 檔案，把頂部 FIREBASE_CONFIG 的值填入後儲存再開啟。
+  </div>
+
+  <div class="header">
+    <button class="nav-btn" id="prev">‹ 上月</button>
+    <h1 id="month-label"></h1>
+    <button class="nav-btn" id="next">下月 ›</button>
+  </div>
+
+  <div class="dow-row">
+    <div class="dow-cell">日</div>
+    <div class="dow-cell">一</div>
+    <div class="dow-cell">二</div>
+    <div class="dow-cell">三</div>
+    <div class="dow-cell">四</div>
+    <div class="dow-cell">五</div>
+    <div class="dow-cell">六</div>
+  </div>
+
+  <div class="cal-grid" id="cal-grid"></div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#FAC775"></div>白班</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#0C447C"></div>夜班</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#85B7EB"></div>加班</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#888780"></div>休假</div>
+  </div>
+
+  <div class="sync-status" id="sync-status">連線中...</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">選擇班別</div>
+    <div class="shift-btns">
+      <button class="shift-btn" data-shift="day" style="color:#7A5500">
+        <div class="shift-dot-sm" style="background:#FAC775"></div>白班
+      </button>
+      <button class="shift-btn" data-shift="night" style="color:#0C447C">
+        <div class="shift-dot-sm" style="background:#0C447C;outline:1px solid #D3D1C7;outline-offset:0"></div>夜班
+      </button>
+      <button class="shift-btn" data-shift="ot" style="color:#185FA5">
+        <div class="shift-dot-sm" style="background:#85B7EB"></div>加班
+      </button>
+      <button class="shift-btn" data-shift="off" style="color:#444441">
+        <div class="shift-dot-sm" style="background:#888780"></div>休假
+      </button>
+    </div>
+    <button class="clear-btn" id="clear-btn">清除標記</button>
+    <button class="cancel-btn" id="cancel-btn">取消</button>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// ── Shifts definition ──
+const SHIFTS = {
+  day:   { label: '白班', color: '#FAC775' },
+  night: { label: '夜班', color: '#0C447C' },
+  ot:    { label: '加班', color: '#85B7EB' },
+  off:   { label: '休假', color: '#888780' },
+};
+
+// ── State ──
+let data = {};
+let curY = new Date().getFullYear();
+let curM = new Date().getMonth();
+let selDate = null;
+let db = null;
+let dbRef = null;
+let firebaseOk = false;
+
+// ── Firebase init ──
+function initFirebase() {
+  const isPlaceholder = FIREBASE_CONFIG.apiKey.includes('填入');
+  if (isPlaceholder) {
+    document.getElementById('error-banner').classList.add('show');
+    setStatus('未設定 Firebase，資料只在本機');
+    renderCal();
+    return;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    dbRef = db.ref('family-calendar');
+    firebaseOk = true;
+    setStatus('連線中...');
+    dbRef.on('value', snap => {
+      data = snap.val() || {};
+      renderCal();
+      setStatus('已連線，資料即時同步 ✓');
+    }, err => {
+      setStatus('連線失敗：' + err.message);
+    });
+  } catch(e) {
+    setStatus('Firebase 設定有誤：' + e.message);
+    renderCal();
+  }
+}
+
+// ── Helpers ──
+function dateKey(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function setStatus(t) {
+  document.getElementById('sync-status').textContent = t;
+}
+
+// ── Render calendar ──
+function renderCal() {
+  const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  document.getElementById('month-label').textContent = `${curY} 年 ${months[curM]}`;
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  const today = new Date();
+  const firstDow = new Date(curY, curM, 1).getDay();
+  const daysInMonth = new Date(curY, curM + 1, 0).getDate();
+
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) {
+    const d = new Date(curY, curM, 1 - firstDow + i);
+    cells.push({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), other: true });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ y: curY, m: curM, d, other: false });
+  }
+  const remain = (7 - cells.length % 7) % 7;
+  for (let i = 1; i <= remain; i++) {
+    const d = new Date(curY, curM + 1, i);
+    cells.push({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), other: true });
+  }
+
+  cells.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'day-cell' + (c.other ? ' other-month' : '');
+
+    const isToday = c.y === today.getFullYear() && c.m === today.getMonth() && c.d === today.getDate();
+    if (isToday) el.classList.add('today');
+
+    const num = document.createElement('div');
+    num.className = 'day-num';
+    num.textContent = c.d;
+    el.appendChild(num);
+
+    const k = dateKey(c.y, c.m, c.d);
+    const shifts = data[k];
+    if (shifts && Object.keys(shifts).length > 0) {
+      const row = document.createElement('div');
+      row.className = 'dot-row';
+      Object.keys(shifts).forEach(sh => {
+        if (shifts[sh] && SHIFTS[sh]) {
+          const dot = document.createElement('div');
+          dot.className = 'dot';
+          dot.style.background = SHIFTS[sh].color;
+          row.appendChild(dot);
+        }
+      });
+      el.appendChild(row);
+    }
+
+    el.addEventListener('click', () => openModal(c.y, c.m, c.d));
+    grid.appendChild(el);
+  });
+}
+
+// ── Modal ──
+function openModal(y, m, d) {
+  selDate = { y, m, d };
+  const k = dateKey(y, m, d);
+  const shifts = data[k] || {};
+  const hasAny = Object.values(shifts).some(Boolean);
+
+  document.getElementById('modal-title').textContent =
+    `${y} 年 ${m + 1} 月 ${d} 日`;
+
+  // Highlight active shifts
+  document.querySelectorAll('.shift-btn').forEach(btn => {
+    const sh = btn.dataset.shift;
+    btn.classList.toggle('active', !!shifts[sh]);
+    btn.style.borderColor = shifts[sh] ? SHIFTS[sh].color : '';
+  });
+
+  document.getElementById('clear-btn').style.display = hasAny ? 'block' : 'none';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+  selDate = null;
+}
+
+// ── Toggle shift ──
+async function toggleShift(sh) {
+  if (!selDate) return;
+  const k = dateKey(selDate.y, selDate.m, selDate.d);
+  if (!data[k]) data[k] = {};
+  data[k][sh] = !data[k][sh];
+  if (!data[k][sh]) delete data[k][sh];
+  if (Object.keys(data[k]).length === 0) delete data[k];
+
+  closeModal();
+  renderCal();
+  await saveToFirebase();
+}
+
+// ── Clear ──
+async function clearDate() {
+  if (!selDate) return;
+  const k = dateKey(selDate.y, selDate.m, selDate.d);
+  delete data[k];
+  closeModal();
+  renderCal();
+  await saveToFirebase();
+}
+
+// ── Save to Firebase ──
+async function saveToFirebase() {
+  if (!firebaseOk) return;
+  setStatus('儲存中...');
+  try {
+    await dbRef.set(data);
+    setStatus('已同步給家人 ✓');
+    setTimeout(() => setStatus('已連線，資料即時同步 ✓'), 3000);
+  } catch(e) {
+    setStatus('儲存失敗，請檢查網路');
+  }
+}
+
+// ── Event listeners ──
+document.querySelectorAll('.shift-btn').forEach(btn => {
+  btn.addEventListener('click', () => toggleShift(btn.dataset.shift));
+});
+document.getElementById('clear-btn').addEventListener('click', clearDate);
+document.getElementById('cancel-btn').addEventListener('click', closeModal);
+document.getElementById('modal-bg').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.getElementById('prev').addEventListener('click', () => {
+  curM--; if (curM < 0) { curM = 11; curY--; } renderCal();
+});
+document.getElementById('next').addEventListener('click', () => {
+  curM++; if (curM > 11) { curM = 0; curY++; } renderCal();
+});
+
+// ── Start ──
+initFirebase();
+</script>
+</body>
+</html>
