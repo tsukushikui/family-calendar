@@ -303,7 +303,8 @@
     <div class="legend-item"><div class="legend-dot" style="background:#FAC775"></div>白班</div>
     <div class="legend-item"><div class="legend-dot" style="background:#0C447C"></div>夜班</div>
     <div class="legend-item"><div class="legend-dot" style="background:#85B7EB"></div>加班</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#F4845F"></div>姊回員林</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#5BAD7F"></div>姊回員林</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#F4845F"></div>媽回嘉義</div>
   </div>
 
   <div class="sync-status" id="sync-status">連線中...</div>
@@ -323,8 +324,11 @@
       <button class="shift-btn" data-shift="ot" style="color:#185FA5">
         <div class="shift-dot-sm" style="background:#85B7EB"></div>加班
       </button>
-      <button class="shift-btn" data-shift="off" style="color:#444441">
-        <div class="shift-dot-sm" style="background:#F4845F"></div>姊回員林
+      <button class="shift-btn" data-shift="sis_yl" style="color:#444441">
+        <div class="shift-dot-sm" style="background:#5BAD7F"></div>姊回員林
+      </button>
+      <button class="shift-btn" data-shift="sis_yl" style="color:#444441">
+        <div class="shift-dot-sm" style="background:#F4845F"></div>媽回嘉義
       </button>
     </div>
     <button class="clear-btn" id="clear-btn">清除標記</button>
@@ -342,7 +346,8 @@ const SHIFTS = {
   day:   { label: '白班', color: '#FAC775' },
   night: { label: '夜班', color: '#0C447C' },
   ot:    { label: '加班', color: '#85B7EB' },
-  off:   { label: '姊回員林', color: '#F4845F' },
+  sis_yl:   { label: '姊回員林', color: '#5BAD7F' },
+  mom_cy:   { label: '媽回嘉義', color: '#F4845F' },
 };
 
 // ── State ──
